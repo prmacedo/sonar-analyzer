@@ -19,23 +19,25 @@ deactivate
 
 # ----------- Unzip scanner.zip -----------
 SCANNER_ZIP="./scanners/scanner.zip"
-SCANNER_DEST="./scanners"
+SCANNER_DEST="./scanners/sonar-scanner"
 
 if [ -f "$SCANNER_ZIP" ]; then
+    rm -rf "$SCANNER_DEST"
     mkdir -p "$SCANNER_DEST"
     unzip -oq "$SCANNER_ZIP" -d "$SCANNER_DEST"
 
-    # Restore executable permissions
-    if [[ "$OSTYPE" != "msys"* && "$OSTYPE" != "win32" ]]; then
-        chmod -R 755 "$SCANNER_DEST"/*
+    # Detect inner directory (the first folder inside SCANNER_DEST)
+    INNER_DIR=$(find "$SCANNER_DEST" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+
+    # If found, set path to its bin folder
+    if [ -n "$INNER_DIR" ]; then
+        ABS_PATH=$(cd "$INNER_DIR" && pwd)
+        SONAR_BIN="$ABS_PATH/bin/sonar-scanner"
+        echo "[Setup] SonarScanner extracted to: $SONAR_BIN"
+        echo "SONAR_SCANNER_PATH=\"$SONAR_BIN\"" >> .env
+    else
+        echo "[Setup] Error: Could not find inner sonar-scanner folder."
     fi
-
-    # Get absolute path
-    ABS_PATH=$(cd "$SCANNER_DEST" && pwd)
-    echo "[Setup] SonarScanner extracted to: $ABS_PATH"
-
-    # Save to .env
-    echo "SONAR_SCANNER_PATH=\"$ABS_PATH/bin/sonar-scanner\"" >> .env
 else
     echo "[Setup] Warning: $SCANNER_ZIP not found, skipping extraction."
 fi
