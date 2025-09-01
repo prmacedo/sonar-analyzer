@@ -6,14 +6,43 @@ import requests
 import csv
 import sys
 from datetime import datetime
+from dotenv import load_dotenv
+
+def load_env():
+    """
+    Load variables from .env file.
+    """
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+    else:
+        print("Warning: .env file not found, falling back to CLI args/env vars.")
+
+def get_scanner_path():
+    """
+    Get SonarScanner path from .env or detect based on OS/arch.
+    Ensure the binary is executable.
+    """
+    scanner_path = os.getenv("SONAR_SCANNER_PATH")
+    if scanner_path and os.path.exists(scanner_path):
+        # Fix permissions automatically (Linux/macOS only)
+        if os.name == "posix":
+            st = os.stat(scanner_path)
+            os.chmod(scanner_path, st.st_mode | 0o111)
+        return scanner_path
+
+    print("Error: SONAR_SCANNER_PATH not set or invalid in .env")
+    sys.exit(1)
 
 def run_analysis(project_dir, project_key, sonar_host, sonar_token):
     """
-    Run sonar-scanner on the given project.
+    Run sonar-scanner on the given project using the bundled scanner.
     """
+    scanner = get_scanner_path()
+
     result = subprocess.run(
         [
-            "sonar-scanner",
+            scanner,
             f"-Dsonar.projectKey={project_key}",
             f"-Dsonar.sources={project_dir}",
             f"-Dsonar.host.url={sonar_host}",
@@ -24,9 +53,13 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
     )
 
     if result.returncode != 0:
-        print("Sonar analysis failed:")
-        print(result.stderr)
+        print("Sonar analysis failed!")
+        print("STDOUT:\n", result.stdout)
+        print("STDERR:\n", result.stderr)
         sys.exit(1)
+    else:
+        print("Sonar analysis completed successfully.")
+        print("STDOUT:\n", result.stdout)
 
 def fetch_measures(sonar_host, sonar_token, project_key, metrics):
     """
@@ -38,7 +71,7 @@ def fetch_measures(sonar_host, sonar_token, project_key, metrics):
     response.raise_for_status()
     return response.json()
 
-def save_to_csv(output_dir, project_key, metrics, data):
+def save_to_csv(output_dir, project_key, username, metrics, data):
     """
     Save the SonarQube measures to a CSV file.
     Always include all metrics, default to 0 if missing.
@@ -51,33 +84,35 @@ def save_to_csv(output_dir, project_key, metrics, data):
 
     with open(filename, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["Metric", "Value"])
+        writer.writerow(["Username", "Project", "Timestamp", "Metric", "Value"])
         for metric in metrics:
-            writer.writerow([metric, measures.get(metric, "0")])
+            writer.writerow([username, project_key, datetime.now().isoformat(), metric, measures.get(metric, "0")])
 
     print(f"Results saved to {filename}")
 
 def main():
+    load_env()
+
     parser = argparse.ArgumentParser(description="Run SonarQube analysis and export results to CSV.")
-    parser.add_argument("project_dir", help="Path to the project directory")
-    parser.add_argument("project_key", help="Unique SonarQube project key")
-    parser.add_argument("username", help="Username (for reference only, token used for auth)")
-    parser.add_argument("output_dir", help="Directory to save CSV results")
-    parser.add_argument("--sonar-host", default="http://localhost:9000", help="SonarQube server URL")
-    parser.add_argument("--sonar-token", help="SonarQube authentication token")
+    parser.add_argument("--sonar-host", default=os.getenv("SONAR_HOST", "http://localhost:9000"), help="SonarQube server URL")
+    parser.add_argument("--sonar-token", default=os.getenv("SONAR_TOKEN"), help="SonarQube authentication token")
 
     args = parser.parse_args()
 
+    project_dir = os.getenv("PROJECT_DIR")
+    project_key = os.getenv("SONAR_PROJECT_KEY")
+    username = os.getenv("USERNAME", "unknown")
+    output_dir = os.getenv("OUTPUT_DIR", "results")
+
     if not args.sonar_token:
-        print("Error: You must provide --sonar-token")
+        print("Error: You must provide --sonar-token or set SONAR_TOKEN in .env")
         sys.exit(1)
 
-    # Fixed set of metrics you always want to collect
     metrics = ["bugs", "code_smells", "vulnerabilities", "coverage", "duplicated_lines_density"]
 
-    run_analysis(args.project_dir, args.project_key, args.sonar_host, args.sonar_token)
-    data = fetch_measures(args.sonar_host, args.sonar_token, args.project_key, metrics)
-    save_to_csv(args.output_dir, args.project_key, metrics, data)
+    run_analysis(project_dir, project_key, args.sonar_host, args.sonar_token)
+    data = fetch_measures(args.sonar_host, args.sonar_token, project_key, metrics)
+    save_to_csv(output_dir, project_key, username, metrics, data)
 
 if __name__ == "__main__":
     main()
