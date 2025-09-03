@@ -21,21 +21,27 @@ call .venv\Scripts\deactivate.bat
 
 :: ----------- Unzip scanner.zip -----------
 if exist "%SCANNER_ZIP%" (
-    rmdir /s /q "%SCANNER_DEST%" 2>nul
     mkdir "%SCANNER_DEST%"
     powershell -Command "Expand-Archive -Force '%SCANNER_ZIP%' '%SCANNER_DEST%'"
 
     :: Find first folder inside SCANNER_DEST
+    set "INNER_DIR="
     for /d %%D in ("%SCANNER_DEST%\*") do (
-        set "INNER_DIR=%%~fD"
-        goto founddir
+        if not defined INNER_DIR (
+            set "INNER_DIR=%%~fD"
+        )
     )
-    :founddir
+
+    setlocal enabledelayedexpansion
 
     if defined INNER_DIR (
-        set "SONAR_BIN=%INNER_DIR%\bin\sonar-scanner.bat"
-        echo [Setup] SonarScanner extracted to: %SONAR_BIN%
-        echo SONAR_SCANNER_PATH="%SONAR_BIN%" >> .env
+        set "SONAR_BIN=!INNER_DIR!\bin\sonar-scanner.bat"
+
+        :: Replace \ for /
+        set "SONAR_BIN_SLASH=!SONAR_BIN:\=/!"
+
+        echo [Setup] SonarScanner extracted to: !SONAR_BIN_SLASH!
+        echo SONAR_SCANNER_PATH="!SONAR_BIN_SLASH!" >> .env
     ) else (
         echo [Setup] Error: Could not find inner sonar-scanner folder.
     )
