@@ -34,31 +34,56 @@ def get_scanner_path():
     print("Error: SONAR_SCANNER_PATH not set or invalid in .env")
     sys.exit(1)
 
+def is_flutter_project(project_dir: str) -> bool:
+    """Check if project is a Flutter project."""
+    pubspec = os.path.join(project_dir, "pubspec.yaml")
+    if os.path.exists(pubspec):
+        with open(pubspec, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("flutter:"):
+                    return True
+    return False
+
 def run_analysis(project_dir, project_key, sonar_host, sonar_token):
     """
     Run sonar-scanner on the given project using the bundled scanner.
     """
     scanner = get_scanner_path()
 
-    result = subprocess.run(
-        [
+    if is_flutter_project(project_dir):
+        print(f"✅ Detected Flutter project at {project_dir}")
+
+        cmd = [
+            scanner,
+            f"-Dsonar.projectKey={project_key}",
+            f"-Dsonar.projectName={project_key}",
+            "-Dsonar.projectVersion=1.0",
+            "-Dsonar.sourceEncoding=UTF-8",
+            f"-Dsonar.projectBaseDir={project_dir}",
+            "-Dsonar.sources=lib,pubspec.yaml",
+            "-Dsonar.tests=test",
+            f"-Dsonar.host.url={sonar_host}",
+            f"-Dsonar.token={sonar_token}",
+        ]
+    else:
+        print(f"ℹ️ Standard project analysis for {project_dir}")
+        cmd = [
             scanner,
             f"-Dsonar.projectKey={project_key}",
             f"-Dsonar.sources={project_dir}",
             f"-Dsonar.host.url={sonar_host}",
-            f"-Dsonar.login={sonar_token}",
-        ],
-        capture_output=True,
-        text=True
-    )
+            f"-Dsonar.token={sonar_token}",
+        ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print("Sonar analysis failed!")
+        print("❌ Sonar analysis failed!")
         print("STDOUT:\n", result.stdout)
         print("STDERR:\n", result.stderr)
         sys.exit(1)
     else:
-        print("Sonar analysis completed successfully.")
+        print("✅ Sonar analysis completed successfully.")
         print("STDOUT:\n", result.stdout)
 
 def fetch_measures(sonar_host, sonar_token, project_key, metrics):
