@@ -1,3 +1,23 @@
+# Execuntando o projeto
+
+```bash
+# Fazer setup para rodar sonarqube no docker
+./setup-sonarqube.sh
+
+# Executar Sonarqube
+docker compose up -d
+```
+
+Acessar o sonarqube em `http://localhost:9000` e criar um token e adicionar no script `run.sh`.
+
+```bash
+# Fazer setup do projeto
+./setup.sh
+
+# Rodar análise do projeto
+./run.sh
+```
+
 Para rodar o SonarQube é preciso executar esse comando no Linux
 
 ```bash
