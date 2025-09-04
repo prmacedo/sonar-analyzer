@@ -105,25 +105,17 @@ def save_to_csv(output_dir, project_key, username, metrics, data):
     filename = os.path.join(output_dir, f"{project_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
     # Build dictionary of returned measures
-    measures = {}
-    for m in data.get("component", {}).get("measures", []):
-        metric = m.get("metric")
-        value = m.get("value")
-        if value is None and "periods" in m:  # sometimes only periods exist
-            value = m["periods"][0].get("value")
-        measures[metric] = value if value is not None else "0"
-
+    measures = data.get("component", {}).get("measures", [])
+    
     with open(filename, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Username", "Project", "Timestamp", "Metric", "Value"])
-        for metric in metrics:
-            writer.writerow([
-                username,
-                project_key,
-                datetime.now().isoformat(),
-                metric,
-                measures.get(metric, "0")
-            ])
+        now = datetime.now().isoformat()
+
+        for m in measures:
+            metric = m.get("metric")
+            value = m.get("value")
+            writer.writerow([username, project_key, now, metric, value or "0"])
 
     print(f"Results saved to {filename}")
 
