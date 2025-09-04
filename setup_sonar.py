@@ -30,30 +30,6 @@ def download_scanner(url, dest_dir="scanners"):
         print(f"Downloading SonarScanner from {url} ...")
         urllib.request.urlretrieve(url, zip_path)
 
-    # print("Extracting SonarScanner...")
-    # with zipfile.ZipFile(zip_path, "r") as zip_ref:
-    #     zip_ref.extractall(dest_dir)
-
-    # system = platform.system().lower()
-    
-    # Find extracted folder
-    # for entry in os.listdir(dest_dir):
-    #     if entry.startswith("sonar-scanner"):
-    #         scanner_dir = os.path.join(dest_dir, entry)
-
-    #         # Restore +x permissions for all scripts in bin/
-    #         if platform.system().lower() in ("linux", "darwin"):
-    #             bin_dir = os.path.join(scanner_dir, "bin")
-    #             if os.path.isdir(bin_dir) and system in ("linux", "darwin"):
-    #                 for fname in os.listdir(bin_dir):
-    #                     fpath = os.path.join(bin_dir, fname)
-    #                     if os.path.isfile(fpath):
-    #                         os.chmod(fpath, 0o755)
-
-            # return scanner_dir
-
-    # raise RuntimeError("Could not find extracted sonar-scanner folder")
-
 def slugify(text):
     text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -61,11 +37,12 @@ def slugify(text):
 
 def main():
     url = detect_scanner_url()
-    scanner_path = download_scanner(url)
+    download_scanner(url)
 
     project_dir = input("Enter the absolute path to your project directory: ").strip()
     username = input("Enter your name: ").strip()
     output_dir = input("Enter the absolute path for CSV output directory: ").strip()
+    sonar_token = input("Enter the SonarQube token: ").strip()
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -79,6 +56,7 @@ PROJECT_DIR="{project_dir}"
 USERNAME="{username}"
 OUTPUT_DIR="{output_dir}"
 SONAR_PROJECT_KEY="{project_key}"
+SONAR_TOKEN="{sonar_token}"
 """
     with open(".env", "w") as f:
         f.write(env_content)
