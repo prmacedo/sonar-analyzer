@@ -38,10 +38,13 @@ def is_flutter_project(project_dir: str) -> bool:
     """Check if project is a Flutter project."""
     pubspec = os.path.join(project_dir, "pubspec.yaml")
     if os.path.exists(pubspec):
-        with open(pubspec, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip().startswith("flutter:"):
-                    return True
+        try:
+            with open(pubspec, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("flutter:"):
+                        return True
+        except (IOError, UnicodeDecodeError) as e:
+            print(f"Error reading pubspec.yaml: {e}")
     return False
 
 def run_analysis(project_dir, project_key, sonar_host, sonar_token):
