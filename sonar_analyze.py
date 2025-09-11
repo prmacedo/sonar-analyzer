@@ -104,8 +104,9 @@ def save_to_csv(output_dir, project_key, username, metrics, data):
     Save the SonarQube measures to a CSV file.
     Always include all metrics, default to 0 if missing.
     """
-    os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f"{project_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    results_dir = os.path.join(output_dir, "sonar_analyzer_results")
+    os.makedirs(results_dir, exist_ok=True)
+    filename = os.path.join(results_dir, f"{project_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
     # Build dictionary of returned measures
     measures = data.get("component", {}).get("measures", [])
@@ -133,11 +134,24 @@ def main():
 
     project_dir = os.getenv("PROJECT_DIR")
     project_key = os.getenv("SONAR_PROJECT_KEY")
-    username = os.getenv("USERNAME", "unknown")
-    output_dir = os.getenv("OUTPUT_DIR", "results")
+    username = os.getenv("USERNAME")
+    output_dir = os.getenv("OUTPUT_DIR")
 
     if not args.sonar_token:
         print("Error: You must provide --sonar-token or set SONAR_TOKEN in .env")
+        sys.exit(1)
+
+    missing = []
+    if not project_dir:
+        missing.append("PROJECT_DIR")
+    if not project_key:
+        missing.append("SONAR_PROJECT_KEY")
+    if not username:
+        missing.append("USERNAME")
+    if not output_dir:
+        missing.append("OUTPUT_DIR")
+    if missing:
+        print(f"Error: Missing required environment variables: {', '.join(missing)}")
         sys.exit(1)
 
     metrics = ["accepted_issues", "new_technical_debt", "new_software_quality_maintainability_remediation_effort", "analysis_from_sonarqube_9_4", "high_impact_accepted_issues", "blocker_violations", "software_quality_blocker_issues", "bugs", "classes", "code_smells", "cognitive_complexity", "comment_lines", "comment_lines_data", "comment_lines_density", "branch_coverage", "new_branch_coverage", "conditions_to_cover", "new_conditions_to_cover", "confirmed_issues", "coverage", "new_coverage", "critical_violations", "complexity", "last_commit_date", "development_cost", "new_development_cost", "duplicated_blocks", "new_duplicated_blocks", "duplicated_files", "duplicated_lines", "duplicated_lines_density", "new_duplicated_lines_density", "new_duplicated_lines", "duplications_data", "effort_to_reach_software_quality_maintainability_rating_a", "effort_to_reach_maintainability_rating_a", "executable_lines_data", "false_positive_issues", "files", "functions", "generated_lines", "generated_ncloc", "software_quality_high_issues", "info_violations", "software_quality_info_issues", "violations", "prioritized_rule_issues", "line_coverage", "new_line_coverage", "lines", "ncloc", "ncloc_language_distribution", "lines_to_cover", "new_lines_to_cover", "software_quality_low_issues", "maintainability_issues", "software_quality_maintainability_issues", "sqale_rating", "software_quality_maintainability_rating", "new_maintainability_rating", "new_software_quality_maintainability_rating", "major_violations", "software_quality_medium_issues", "minor_violations", "ncloc_data", "new_accepted_issues", "new_blocker_violations", "new_software_quality_blocker_issues", "new_bugs", "new_code_smells", "new_critical_violations", "new_software_quality_high_issues", "new_info_violations", "new_software_quality_info_issues", "new_violations", "new_lines", "new_software_quality_low_issues", "new_software_quality_maintainability_issues", "new_maintainability_issues", "new_major_violations", "new_software_quality_medium_issues", "new_minor_violations", "new_reliability_issues", "new_software_quality_reliability_issues", "new_security_hotspots", "new_software_quality_security_issues", "new_security_issues", "new_vulnerabilities", "unanalyzed_c", "unanalyzed_cpp", "open_issues", "quality_profiles", "projects", "public_api", "public_documented_api_density", "public_undocumented_api", "pull_request_fixed_issues", "quality_gate_details", "alert_status", "reliability_issues", "software_quality_reliability_issues", "software_quality_reliability_rating", "reliability_rating", "new_software_quality_reliability_rating", "new_reliability_rating", "reliability_remediation_effort", "software_quality_reliability_remediation_effort", "new_software_quality_reliability_remediation_effort", "new_reliability_remediation_effort", "reopened_issues", "security_hotspots", "security_hotspots_reviewed", "new_security_hotspots_reviewed", "software_quality_security_issues", "security_issues", "software_quality_security_rating", "security_rating", "new_software_quality_security_rating", "new_security_rating", "software_quality_security_remediation_effort", "security_remediation_effort", "new_security_remediation_effort", "new_software_quality_security_remediation_effort", "security_review_rating", "new_security_review_rating", "security_hotspots_reviewed_status", "new_security_hotspots_reviewed_status", "security_hotspots_to_review_status", "new_security_hotspots_to_review_status", "skipped_tests", "statements", "software_quality_maintainability_remediation_effort", "sqale_index", "software_quality_maintainability_debt_ratio", "sqale_debt_ratio", "new_sqale_debt_ratio", "new_software_quality_maintainability_debt_ratio", "uncovered_conditions", "new_uncovered_conditions", "uncovered_lines", "new_uncovered_lines", "test_execution_time", "test_errors", "test_failures", "tests", "test_success_density", "vulnerabilities"]

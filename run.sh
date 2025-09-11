@@ -17,11 +17,72 @@ else
   echo "⚠️  .env not found at: $DOTENV"
 fi
 
-echo "[Analyzer] Project dir: ${PROJECT_DIR:-<unset>}"
-echo $SONAR_SCANNER_PATH
+# ---------- Preflight checks ----------
+
+# Defaults
+SONAR_HOST="${SONAR_HOST:-http://localhost:9000}"
+
+missing=()
+
+require_var() {
+  local name="$1"
+  if [ -z "${!name:-}" ]; then
+    missing+=("$name")
+  fi
+}
+
+# Required for analysis
+require_var SONAR_TOKEN
+require_var SONAR_PROJECT_KEY
+require_var PROJECT_DIR
+require_var SONAR_SCANNER_PATH
+require_var USERNAME
+require_var OUTPUT_DIR
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "❌ Missing required environment variables: ${missing[*]}"
+  echo "   Run ./setup.sh to configure the required variables."
+  exit 1
+fi
+
+# Validate paths
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "❌ PROJECT_DIR does not exist or is not a directory: $PROJECT_DIR"
+  exit 1
+fi
+
+if [ ! -f "$SONAR_SCANNER_PATH" ]; then
+  echo "❌ SONAR_SCANNER_PATH not found: $SONAR_SCANNER_PATH"
+  echo "   Re-run ./setup.sh to (re)install the scanner."
+  exit 1
+fi
+
+# Ensure scanner is executable on POSIX systems
+if command -v uname >/dev/null 2>&1 && [ "$(uname)" != "Windows_NT" ]; then
+  chmod +x "$SONAR_SCANNER_PATH" 2>/dev/null || true
+fi
+
+# Check SonarQube availability
+if command -v curl >/dev/null 2>&1; then
+  status_json=$(curl -fsS -m 5 "$SONAR_HOST/api/system/status" || true)
+  if [ -z "$status_json" ]; then
+    echo "❌ Could not reach SonarQube at $SONAR_HOST"
+    echo "   Make sure it is running (e.g., docker compose up -d) or adjust SONAR_HOST."
+    exit 1
+  fi
+  echo "$status_json" | grep -q '"status"\s*:\s*"UP"' || {
+    echo "❌ SonarQube is reachable but not UP: $status_json"
+    exit 1
+  }
+else
+  echo "⚠️ curl not found; skipping SonarQube health check."
+fi
+
+echo "[Analyzer] Sonar host: $SONAR_HOST"
+echo "[Analyzer] Project dir: ${PROJECT_DIR}"
+echo "[Analyzer] Scanner: ${SONAR_SCANNER_PATH}"
 # Detect Flutter project
-if [ -n "${PROJECT_DIR:-}" ] \
-   && [ -f "$PROJECT_DIR/pubspec.yaml" ] \
+if [ -f "$PROJECT_DIR/pubspec.yaml" ] \
    && grep -q "^[[:space:]]*flutter:" "$PROJECT_DIR/pubspec.yaml"; then
   echo "✅ Detected Flutter project"
   (
@@ -35,7 +96,7 @@ if [ -n "${PROJECT_DIR:-}" ] \
     flutter test --machine --coverage > tests.output
   )
 else
-  echo "ℹ️ Not a Flutter project (or PROJECT_DIR unset); skipping Flutter steps."
+  echo "ℹ️ Not a Flutter project; skipping Flutter steps."
 fi
 
 # Activate virtual environment
@@ -46,8 +107,5 @@ else
   echo "[Error] Virtual environment not found. Please run ./setup.sh first."
   exit 1
 fi
-
-# Change if SonarQube is not on localhost:9000
-SONAR_HOST="http://localhost:9000"
 
 python3 ./sonar_analyze.py --sonar-host "$SONAR_HOST" --sonar-token "$SONAR_TOKEN"
