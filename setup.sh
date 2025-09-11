@@ -35,6 +35,13 @@ if [ -f "$SCANNER_ZIP" ]; then
         SONAR_BIN="$ABS_PATH/bin/sonar-scanner"
         echo "[Setup] SonarScanner extracted to: $SONAR_BIN"
         echo "SONAR_SCANNER_PATH=\"$SONAR_BIN\"" >> .env
+        # Also append to all per-project envs (if any)
+        if [ -d "configs" ]; then
+            for envf in configs/*.env; do
+                [ -f "$envf" ] || continue
+                echo "SONAR_SCANNER_PATH=\"$SONAR_BIN\"" >> "$envf"
+            done
+        fi
     else
         echo "[Setup] Error: Could not find inner sonar-scanner folder."
     fi

@@ -10,11 +10,26 @@ from dotenv import load_dotenv
 
 def load_env():
     """
-    Load variables from .env file.
+    Load variables from a .env file.
+    - If DOTENV is set in the environment, prefer that file.
+    - Otherwise, fall back to <repo>/.env next to this script.
+    Does not override variables already present in the environment.
     """
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
+    dotenv_from_env = os.getenv("DOTENV")
+    if dotenv_from_env:
+        env_path = dotenv_from_env
+        if not os.path.isabs(env_path):
+            env_path = os.path.join(os.path.dirname(__file__), env_path)
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=False)
+            return
+        else:
+            print(f"Warning: DOTENV set but file not found: {env_path}")
+
+    # Fallback to root .env near this file
+    fallback = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(fallback):
+        load_dotenv(fallback, override=False)
     else:
         print("Warning: .env file not found, falling back to CLI args/env vars.")
 
@@ -73,6 +88,7 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
         cmd = [
             scanner,
             f"-Dsonar.projectKey={project_key}",
+            f"-Dsonar.projectBaseDir={project_dir}",
             f"-Dsonar.sources={project_dir}",
             f"-Dsonar.host.url={sonar_host}",
             f"-Dsonar.token={sonar_token}",
