@@ -99,13 +99,14 @@ else
   echo "ℹ️ Not a Flutter project; skipping Flutter steps."
 fi
 
-# Activate virtual environment
-if [ -d ".venv" ]; then
+# Activate virtual environment (relative to this repo)
+if [ -d "$SCRIPT_DIR/.venv" ]; then
   echo "[Info] Activating virtual environment..."
-  source .venv/bin/activate
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.venv/bin/activate"
 else
   echo "[Error] Virtual environment not found. Please run ./setup.sh first."
   exit 1
 fi
 
-python3 ./sonar_analyze.py --sonar-host "$SONAR_HOST" --sonar-token "$SONAR_TOKEN"
+python3 "$SCRIPT_DIR/sonar_analyze.py" --sonar-host "$SONAR_HOST" --sonar-token "$SONAR_TOKEN"

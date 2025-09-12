@@ -93,7 +93,7 @@ Description=Run Sonar scripts on weekdays
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env bash -lc '$SCRIPT_DIR/run-weekdays.sh --${variant}'
+ExecStart="$SCRIPT_DIR/run-weekdays.sh" --${variant}
 EOF
 
   cat >"$tmr" <<EOF
@@ -131,9 +131,8 @@ install_macos_launchd() {
     <key>Label</key><string>$label</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/bin/bash</string>
-      <string>-lc</string>
-      <string>$SCRIPT_DIR/run-weekdays.sh --$variant</string>
+      <string>$SCRIPT_DIR/run-weekdays.sh</string>
+      <string>--$variant</string>
     </array>
     <key>StartCalendarInterval</key>
     <array>
