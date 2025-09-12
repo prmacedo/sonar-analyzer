@@ -1,20 +1,24 @@
 @echo off
-REM Usage: run_sonar.bat <project_dir> <project_key> <username> <output_dir>
+setlocal EnableExtensions
 
-:: Check if venv exists
-if not exist ".venv\Scripts\activate.bat" (
-    echo [Error] Virtual environment not found. Please run setup.bat first.
-    exit /b 1
+REM Resolve script directory (with trailing backslash)
+set "SCRIPT_DIR=%~dp0"
+
+REM Activate virtual environment (relative to this repo)
+if not exist "%SCRIPT_DIR%.venv\Scripts\activate.bat" (
+  echo [Error] Virtual environment not found. Please run setup.bat first.
+  exit /b 1
 )
+call "%SCRIPT_DIR%.venv\Scripts\activate.bat"
 
-:: Activate venv
-call .venv\Scripts\activate.bat
+REM Optional: respect existing SONAR_HOST or just rely on Python defaults
+if not defined SONAR_HOST set "SONAR_HOST=http://localhost:9000"
 
-REM Change this if your SonarQube server is not on localhost:9000
-set SONAR_HOST=http://localhost:9000
+REM Run analyzer; sonar_analyze.py loads .env/DOTENV itself and validates env.
+python "%SCRIPT_DIR%sonar_analyze.py" --sonar-host "%SONAR_HOST%"
+set "_exit=%ERRORLEVEL%"
 
-REM Sonar token must be set as an environment variable in Windows
-set SONAR_TOKEN=sqa_8d0a8d1783d6d061234c35005c8e83fc3f7e6d7b
+REM Deactivate venv (optional)
+if exist "%SCRIPT_DIR%.venv\Scripts\deactivate.bat" call "%SCRIPT_DIR%.venv\Scripts\deactivate.bat"
 
-REM Adjust python path if needed (e.g., python instead of python3)
-python sonar_analyze.py --sonar-host %SONAR_HOST% --sonar-token %SONAR_TOKEN%
+exit /b %_exit%

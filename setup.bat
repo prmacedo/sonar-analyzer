@@ -1,5 +1,6 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
+
 set "SCANNER_ZIP=scanners\scanner.zip"
 set "SCANNER_DEST=scanners"
 
@@ -21,8 +22,8 @@ call .venv\Scripts\deactivate.bat
 
 :: ----------- Unzip scanner.zip -----------
 if exist "%SCANNER_ZIP%" (
-    mkdir "%SCANNER_DEST%"
-    powershell -Command "Expand-Archive -Force '%SCANNER_ZIP%' '%SCANNER_DEST%'"
+    if not exist "%SCANNER_DEST%" mkdir "%SCANNER_DEST%"
+    powershell -NoProfile -Command "Expand-Archive -Force '%SCANNER_ZIP%' '%SCANNER_DEST%'"
 
     :: Find first folder inside SCANNER_DEST
     set "INNER_DIR="
@@ -32,8 +33,6 @@ if exist "%SCANNER_ZIP%" (
         )
     )
 
-    setlocal enabledelayedexpansion
-
     if defined INNER_DIR (
         set "SONAR_BIN=!INNER_DIR!\bin\sonar-scanner.bat"
 
@@ -42,6 +41,12 @@ if exist "%SCANNER_ZIP%" (
 
         echo [Setup] SonarScanner extracted to: !SONAR_BIN_SLASH!
         echo SONAR_SCANNER_PATH="!SONAR_BIN_SLASH!" >> .env
+
+        if exist "configs" (
+            for %%F in ("configs\*.env") do (
+                echo SONAR_SCANNER_PATH="!SONAR_BIN_SLASH!" >> "%%~fF"
+            )
+        )
     ) else (
         echo [Setup] Error: Could not find inner sonar-scanner folder.
     )
@@ -52,3 +57,4 @@ if exist "%SCANNER_ZIP%" (
 echo [Setup] Done! Your settings have been written to .env.
 echo          You can now run run.bat to analyze your project.
 endlocal
+

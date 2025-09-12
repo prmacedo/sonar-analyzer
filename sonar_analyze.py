@@ -67,6 +67,8 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
     Run sonar-scanner on the given project using the bundled scanner.
     """
     scanner = get_scanner_path()
+    # Normalize Windows paths to forward slashes
+    project_dir_norm = project_dir.replace("\\", "/")
 
     if is_flutter_project(project_dir):
         print(f"✅ Detected Flutter project at {project_dir}")
@@ -77,7 +79,7 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
             f"-Dsonar.projectName={project_key}",
             "-Dsonar.projectVersion=1.0",
             "-Dsonar.sourceEncoding=UTF-8",
-            f"-Dsonar.projectBaseDir={project_dir}",
+            f"-Dsonar.projectBaseDir={project_dir_norm}",
             "-Dsonar.sources=lib,pubspec.yaml",
             "-Dsonar.tests=test",
             f"-Dsonar.host.url={sonar_host}",
@@ -85,14 +87,25 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
         ]
     else:
         print(f"ℹ️ Standard project analysis for {project_dir}")
+        # Optionally override sources to avoid traversing node_modules
+        sources_value = os.getenv("SONAR_SOURCES") or "."
+        exclusions_value = os.getenv("SONAR_EXCLUSIONS") or "**/node_modules/**,**/node_modules/.bin/**,**/dist/**,**/build/**,**/.next/**,**/.venv/**,**/__pycache__/**,**/.git/**,**/target/**,**/.mypy_cache/**"
+
         cmd = [
             scanner,
             f"-Dsonar.projectKey={project_key}",
-            f"-Dsonar.projectBaseDir={project_dir}",
-            f"-Dsonar.sources={project_dir}",
+            f"-Dsonar.projectBaseDir={project_dir_norm}",
+            f"-Dsonar.sources={sources_value}",
+            f"-Dsonar.exclusions={exclusions_value}",
+            f"-Dsonar.javascript.exclusions={exclusions_value}",
+            f"-Dsonar.typescript.exclusions={exclusions_value}",
             f"-Dsonar.host.url={sonar_host}",
             f"-Dsonar.token={sonar_token}",
         ]
+
+    # Enable verbose logs if requested
+    if os.getenv("SCANNER_DEBUG") == "1":
+        cmd.insert(1, "-X")
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -126,7 +139,7 @@ def save_to_csv(output_dir, project_key, username, metrics, data):
 
     # Build dictionary of returned measures
     measures = data.get("component", {}).get("measures", [])
-    
+
     with open(filename, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Username", "Project", "Timestamp", "Metric", "Value"])
