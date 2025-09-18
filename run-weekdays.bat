@@ -103,11 +103,38 @@ exit /b %_code%
 REM Create/replace a Windows Scheduled Task (Mon-Fri at %RUN_TIME%)
 set "TASK_NAME=sonar-weekdays"
 
+REM First, try PowerShell-based task for better settings (StartWhenAvailable, logon trigger)
+for /f "tokens=1,2 delims=:" %%H in ("%RUN_TIME%") do ( set "_HH=%%H" & set "_MM=%%I" )
+set "_TMPPS=%TEMP%\sonar_weekdays_install.ps1"
+(
+  echo $ErrorActionPreference = 'Stop'
+  echo $taskName = '%TASK_NAME%'
+  echo $scriptDir = '%SCRIPT_DIR%'
+  echo $variant = '%VARIANT%'
+  echo $hh = %_HH%
+  echo $mm = %_MM%
+  echo $cmd = "cmd.exe"
+  echo $args = "/c cd /d `"`"$scriptDir`"`" ^&^& `"`"$scriptDir`"`"run-weekdays.bat`" --$variant"
+  echo $action = New-ScheduledTaskAction -Execute $cmd -Argument $args
+  echo $t1 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At (Get-Date -Hour $hh -Minute $mm -Second 0)
+  echo $t2 = New-ScheduledTaskTrigger -AtLogOn
+  echo $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable
+  echo Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($t1, $t2) -Settings $settings -Description 'Run Sonar scripts on weekdays' -Force ^| Out-Null
+) > "%_TMPPS%"
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%_TMPPS%" >nul 2>nul
+if not errorlevel 1 (
+  del /q "%_TMPPS%" >nul 2>nul
+  echo [Install] Scheduled task '%TASK_NAME%' created with PowerShell (Mon..Fri %RUN_TIME%, StartWhenAvailable, +AtLogOn).
+  exit /b 0
+)
+del /q "%_TMPPS%" >nul 2>nul
+
+REM Fallback: SCHTASKS basic weekly schedule
 REM Build the task action; fully-quoted paths and script
 set "TASK_ACTION=cmd /c \"cd /d \"\"%SCRIPT_DIR%\"\" ^&^& \"\"%SCRIPT_DIR%run-weekdays.bat\"\" --%VARIANT%\""
 
-REM Create or replace the task for current user
-echo [Install] Creating scheduled task '%TASK_NAME%' (Mon..Fri %RUN_TIME%)
+echo [Install] Creating scheduled task '%TASK_NAME%' with schtasks (Mon..Fri %RUN_TIME%)
 schtasks /Create /F /TN "%TASK_NAME%" /TR "%TASK_ACTION%" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST "%RUN_TIME%" >nul 2>nul
 if errorlevel 1 (
   echo [Error] Failed to create the scheduled task. Try running as Administrator or create it manually.
@@ -119,4 +146,3 @@ exit /b 0
 
 :eof
 endlocal
-
