@@ -90,10 +90,19 @@ install_linux_systemd() {
   cat >"$svc" <<EOF
 [Unit]
 Description=Run Sonar scripts on weekdays
+ConditionPathExists=/var/run/docker.sock
 
 [Service]
 Type=oneshot
-ExecStart="$SCRIPT_DIR/run-weekdays.sh" --${variant}
+# Ensure Docker daemon is available before running; if not, skip this run.
+ExecStartPre=/usr/bin/env bash -lc 'docker info >/dev/null 2>&1'
+# Optional: ensure container list is readable (no hard failure if missing container)
+ExecStartPre=/usr/bin/env bash -lc 'docker ps >/dev/null 2>&1'
+WorkingDirectory=$SCRIPT_DIR
+Environment=SONAR_CONTAINER_NAME=sa_sonarqube
+Environment=SONAR_UP_TIMEOUT=120
+Environment=SONAR_UP_RETRY_AFTER=300
+ExecStart=/usr/bin/env bash -lc '"$SCRIPT_DIR/run-weekdays.sh" --${variant}'
 EOF
 
   cat >"$tmr" <<EOF
@@ -158,8 +167,9 @@ install_cron_fallback() {
   # Add @daily at time and @reboot entries calling this script; stamp file prevents duplicates.
   local variant cron_line_daily cron_line_boot time="$RUN_TIME"
   variant=$(pick_variant)
-  cron_line_daily="0 $(echo "$time" | cut -d: -f2) $(echo "$time" | cut -d: -f1) * * [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
-  cron_line_boot="@reboot [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
+  # Only run if Docker is available; otherwise skip silently.
+  cron_line_daily="0 $(echo "$time" | cut -d: -f2) $(echo "$time" | cut -d: -f1) * * [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
+  cron_line_boot="@reboot [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
   # Read current crontab
   local tmp
   tmp=$(mktemp)
