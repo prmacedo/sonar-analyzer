@@ -97,6 +97,7 @@ def run_analysis(project_dir, project_key, sonar_host, sonar_token):
             f"-Dsonar.projectBaseDir={project_dir_norm}",
             f"-Dsonar.sources={sources_value}",
             f"-Dsonar.exclusions={exclusions_value}",
+            f"-Dsonar.java.binaries={sources_value}/target/classes",
             f"-Dsonar.javascript.exclusions={exclusions_value}",
             f"-Dsonar.typescript.exclusions={exclusions_value}",
             f"-Dsonar.host.url={sonar_host}",
