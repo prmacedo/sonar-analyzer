@@ -51,8 +51,7 @@ REM ---------- helpers ----------
   set /a _interval=3
   echo [Prereq] Ensuring SonarQube is UP at %SONAR_HOST% (timeout %SONAR_UP_TIMEOUT%s)
   :_wait_loop
-    if !
-_waited! GEQ %SONAR_UP_TIMEOUT% goto _wait_fail
+    if !_waited! GEQ %SONAR_UP_TIMEOUT% goto _wait_fail
     call :check_ready
     if errorlevel 1 (
       timeout /t !_interval! /nobreak >nul
@@ -98,5 +97,5 @@ _waited! GEQ %SONAR_UP_TIMEOUT% goto _wait_fail
   if /I "%_running%"=="true" ( exit /b 0 ) else ( exit /b 1 )
 
 :sonar_up_http
-  powershell -NoProfile -Command "try { $j = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 \"%SONAR_HOST%/api/system/status\"; if ($j.Content -match '""status""\s*:\s*""UP""') { exit 0 } else { exit 1 } } catch { exit 1 }"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%check_sonar_ready.ps1" -SonarHost "%SONAR_HOST%"
   exit /b %ERRORLEVEL%
