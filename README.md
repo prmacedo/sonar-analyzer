@@ -29,7 +29,7 @@ docker compose up -d
 4. Schedule weekday runs
 
 - Linux/WSL: `bash ./run-weekdays.sh --install --time HH:MM [--single|--multi]`
-- Windows: `run-weekdays.bat --install --time HH:MM [--single|--multi]`
+- Windows: `schedule_weekdays.bat --time HH:MM [--multi|--single] [--force]` (uses Windows Task Scheduler)
 
 Notes
 
