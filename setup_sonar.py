@@ -1,8 +1,9 @@
-import os
+﻿import os
 import platform
 import zipfile
 import urllib.request
 import re
+from commit_history import create_baseline_history
 
 SCANNERS = {
     ("linux", "x86_64"): "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.2.0.5079-linux-x64.zip",
@@ -61,6 +62,7 @@ def main():
     # Generate unique project keys and env files
     seen_keys = set()
     env_paths = []
+    history_results = []
     for d in dirs:
         folder_name = os.path.basename(os.path.normpath(d))
         base_key = slugify(f"{username}-{folder_name}")
@@ -85,10 +87,23 @@ def main():
             f.write(env_content)
         env_paths.append(env_path)
 
+        history_info = create_baseline_history(d, project_key, output_dir)
+        history_results.append((project_key, history_info))
+
     # For backward compatibility, also write .env for the first project
     with open(".env", "w") as f:
         with open(env_paths[0], "r") as e0:
             f.write(e0.read())
+
+    for project_key, info in history_results:
+        status = info.get("status")
+        if status == "created":
+            commit_count = info.get("commit_count", 0)
+            path = info.get("path") or "N/A"
+            print(f"[Commits] Baseline saved for {project_key}: {commit_count} commit(s) -> {path}")
+        elif status == "skipped":
+            reason = info.get("reason") or "unavailable"
+            print(f"[Commits] Skipped commit history for {project_key} ({reason})")
 
     print("\n✅ Setup complete!")
     if len(env_paths) == 1:
