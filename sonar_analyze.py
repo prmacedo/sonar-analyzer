@@ -5,6 +5,9 @@ import subprocess
 import requests
 import csv
 import sys
+import platform
+import socket
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from commit_history import append_commit_history
@@ -130,6 +133,45 @@ def fetch_measures(sonar_host, sonar_token, project_key, metrics):
     response.raise_for_status()
     return response.json()
 
+_FILENAME_SAFE = re.compile(r"[^\w.-]")
+
+
+def sanitize_for_filename(value: str) -> str:
+    """Normalize a string so it is safe for filenames."""
+    if not value:
+        return "unknown"
+    sanitized = _FILENAME_SAFE.sub("_", value)
+    sanitized = sanitized.strip("_")
+    return sanitized or "unknown"
+
+
+def get_machine_and_network():
+    """
+    Resolve machine and network identifiers from env or system defaults.
+    MACHINE_NAME/NETWORK_NAME env vars override automatic detection.
+    """
+    machine = os.getenv("MACHINE_NAME")
+    if not machine:
+        candidates = [
+            platform.node(),
+            os.getenv("COMPUTERNAME"),
+            socket.gethostname(),
+        ]
+        machine = next((c for c in candidates if c), "unknown-machine")
+    machine = machine.strip() or "unknown-machine"
+
+    network = os.getenv("NETWORK_NAME")
+    if not network:
+        candidates = [
+            os.getenv("USERDOMAIN"),
+            socket.getfqdn(),
+        ]
+        network = next((c for c in candidates if c and c != machine), None)
+    network = (network or "").strip() or "unknown-network"
+
+    return machine, network
+
+
 def save_to_csv(output_dir, project_key, username, metrics, data):
     """
     Save the SonarQube measures to a CSV file.
@@ -137,7 +179,12 @@ def save_to_csv(output_dir, project_key, username, metrics, data):
     """
     results_dir = os.path.join(output_dir, "sonar_analyzer_results")
     os.makedirs(results_dir, exist_ok=True)
-    filename = os.path.join(results_dir, f"{project_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    machine_name, network_name = get_machine_and_network()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = os.path.join(
+        results_dir,
+        f"{sanitize_for_filename(project_key)}_{sanitize_for_filename(machine_name)}_{sanitize_for_filename(network_name)}_{timestamp}.csv",
+    )
 
     # Build dictionary of returned measures
     measures = data.get("component", {}).get("measures", [])
