@@ -90,7 +90,6 @@ install_linux_systemd() {
   cat >"$svc" <<EOF
 [Unit]
 Description=Run Sonar scripts on weekdays
-ConditionPathExists=/var/run/docker.sock
 
 [Service]
 Type=oneshot
