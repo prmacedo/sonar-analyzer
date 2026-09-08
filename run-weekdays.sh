@@ -1,37 +1,86 @@
 #!/bin/bash
 
-# Weekday runner and scheduler helper.
+# Scheduled runner and scheduler helper.
 #
 # Run now (auto single/multi):
 #   ./run-weekdays.sh
 # Force multi or single:
 #   ./run-weekdays.sh --multi | --single
 # Install scheduler (Linux systemd user, macOS launchd, or cron fallback):
-#   ./run-weekdays.sh --install [--time HH:MM] [--multi|--single]
+#   ./run-weekdays.sh --install [--time HH:MM] [--days mon,wed,fri|all] [--multi|--single]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 DEFAULT_TIME="09:00"
+DEFAULT_DAYS="mon,tue,wed,thu,fri"
 
 usage() {
-  echo "Usage: $0 [--install] [--time HH:MM] [--multi|--single]" >&2
+  echo "Usage: $0 [--install] [--time HH:MM] [--days mon,tue,wed,thu,fri|all] [--multi|--single]" >&2
 }
 
 MODE="run"
 RUN_VARIANT="auto"  # auto|multi|single
 RUN_TIME="$DEFAULT_TIME"
+RUN_DAYS="$DEFAULT_DAYS"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --install) MODE="install" ; shift ;;
     --time) RUN_TIME="${2:-}" ; shift 2 ;;
+    --days) RUN_DAYS="${2:-}" ; shift 2 ;;
     --multi) RUN_VARIANT="multi" ; shift ;;
     --single) RUN_VARIANT="single" ; shift ;;
     -h|--help) usage ; exit 0 ;;
     *) echo "Unknown argument: $1" >&2 ; usage ; exit 2 ;;
   esac
 done
+
+normalize_days() {
+  SCHEDULE_DAYS_LABEL=""
+  SYSTEMD_DAYS=""
+  MACOS_WEEKDAYS=""
+  CRON_WEEKDAYS=""
+  RUN_DAYS_NUMS=","
+
+  local raw="${RUN_DAYS// /}"
+  if [ -z "$raw" ]; then
+    echo "Error: --days cannot be empty" >&2
+    exit 2
+  fi
+  case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')" in
+    all|daily|everyday|todos|todo|diario|diário)
+      raw="mon,tue,wed,thu,fri,sat,sun"
+      ;;
+  esac
+
+  local IFS=,
+  local token name num
+  for token in $raw; do
+    case "$(printf '%s' "$token" | tr '[:upper:]' '[:lower:]')" in
+      mon|monday|seg|segunda|1) name="Mon"; num="1" ;;
+      tue|tues|tuesday|ter|terca|terça|2) name="Tue"; num="2" ;;
+      wed|wednesday|qua|quarta|3) name="Wed"; num="3" ;;
+      thu|thur|thurs|thursday|qui|quinta|4) name="Thu"; num="4" ;;
+      fri|friday|sex|sexta|5) name="Fri"; num="5" ;;
+      sat|saturday|sab|sábado|sabado|6) name="Sat"; num="6" ;;
+      sun|sunday|dom|domingo|7|0) name="Sun"; num="7" ;;
+      *) echo "Error: invalid day in --days: $token" >&2 ; usage ; exit 2 ;;
+    esac
+
+    if [[ "$RUN_DAYS_NUMS" == *",$num,"* ]]; then
+      continue
+    fi
+
+    SCHEDULE_DAYS_LABEL="${SCHEDULE_DAYS_LABEL:+$SCHEDULE_DAYS_LABEL,}$name"
+    SYSTEMD_DAYS="${SYSTEMD_DAYS:+$SYSTEMD_DAYS,}$name"
+    MACOS_WEEKDAYS="${MACOS_WEEKDAYS:+$MACOS_WEEKDAYS }$num"
+    CRON_WEEKDAYS="${CRON_WEEKDAYS:+$CRON_WEEKDAYS,}$num"
+    RUN_DAYS_NUMS="$RUN_DAYS_NUMS$num,"
+  done
+}
+
+normalize_days
 
 pick_variant() {
   if [ "$RUN_VARIANT" = "multi" ]; then echo multi; return; fi
@@ -48,11 +97,10 @@ ensure_stamp_dir() {
 }
 
 run_now() {
-  # Skip weekends
   local dow
   dow=$(date +%u)  # 1..7 (Mon=1)
-  if [ "$dow" -ge 6 ]; then
-    echo "[Weekdays] Weekend detected (DOW=$dow). Skipping run."
+  if [[ "$RUN_DAYS_NUMS" != *",$dow,"* ]]; then
+    echo "[Scheduler] Today is not scheduled (DOW=$dow; scheduled=$SCHEDULE_DAYS_LABEL). Skipping run."
     exit 0
   fi
 
@@ -89,7 +137,7 @@ install_linux_systemd() {
 
   cat >"$svc" <<EOF
 [Unit]
-Description=Run Sonar scripts on weekdays
+Description=Run Sonar scripts on scheduled days
 
 [Service]
 Type=oneshot
@@ -101,15 +149,15 @@ WorkingDirectory=$SCRIPT_DIR
 Environment=SONAR_CONTAINER_NAME=sa_sonarqube
 Environment=SONAR_UP_TIMEOUT=120
 Environment=SONAR_UP_RETRY_AFTER=300
-ExecStart=/usr/bin/env bash -lc '"$SCRIPT_DIR/run-weekdays.sh" --${variant}'
+ExecStart=/usr/bin/env bash -lc '"$SCRIPT_DIR/run-weekdays.sh" --${variant} --days "$RUN_DAYS"'
 EOF
 
   cat >"$tmr" <<EOF
 [Unit]
-Description=Weekday schedule for $unit_base
+Description=Schedule for $unit_base
 
 [Timer]
-OnCalendar=Mon..Fri $time
+OnCalendar=$SYSTEMD_DAYS $time
 Persistent=true
 
 [Install]
@@ -118,7 +166,7 @@ EOF
 
   systemctl --user daemon-reload
   systemctl --user enable --now "$unit_base.timer"
-  echo "[Install] systemd user timer installed: $tmr (Mon..Fri $time, Persistent=true)"
+  echo "[Install] systemd user timer installed: $tmr ($SCHEDULE_DAYS_LABEL $time, Persistent=true)"
 }
 
 install_macos_launchd() {
@@ -141,15 +189,18 @@ install_macos_launchd() {
     <array>
       <string>/usr/bin/osascript</string>
       <string>-e</string>
-      <string>tell application "Terminal" to do script "/bin/bash '$SCRIPT_DIR/run-weekdays.sh' --$variant &gt;&gt; '$SCRIPT_DIR/sonar-weekdays.log' 2&gt;&gt; '$SCRIPT_DIR/sonar-weekdays.err'"</string>
+      <string>tell application "Terminal" to do script "/bin/bash '$SCRIPT_DIR/run-weekdays.sh' --$variant --days '$RUN_DAYS' &gt;&gt; '$SCRIPT_DIR/sonar-weekdays.log' 2&gt;&gt; '$SCRIPT_DIR/sonar-weekdays.err'"</string>
     </array>
     <key>StartCalendarInterval</key>
     <array>
-      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>1</integer></dict>
-      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>2</integer></dict>
-      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>3</integer></dict>
-      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>4</integer></dict>
-      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>5</integer></dict>
+EOF
+  local day
+  for day in $MACOS_WEEKDAYS; do
+    cat >>"$plist" <<EOF
+      <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>$day</integer></dict>
+EOF
+  done
+  cat >>"$plist" <<EOF
     </array>
     <key>RunAtLoad</key><false/>
     <key>StandardOutPath</key><string>$SCRIPT_DIR/sonar-weekdays.log</string>
@@ -159,7 +210,7 @@ install_macos_launchd() {
 EOF
   launchctl unload "$plist" >/dev/null 2>&1 || true
   launchctl load "$plist"
-  echo "[Install] launchd job installed: $plist (Mon–Fri $time, RunAtLoad=false)"
+  echo "[Install] launchd job installed: $plist ($SCHEDULE_DAYS_LABEL $time, RunAtLoad=false)"
 }
 
 install_cron_fallback() {
@@ -168,8 +219,8 @@ install_cron_fallback() {
   local variant cron_line_daily cron_line_boot time="$RUN_TIME"
   variant=$(pick_variant)
   # Only run if Docker is available; otherwise skip silently.
-  cron_line_daily="0 $(echo "$time" | cut -d: -f2) $(echo "$time" | cut -d: -f1) * * [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
-  cron_line_boot="@reboot [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant"
+  cron_line_daily="$(echo "$time" | cut -d: -f2) $(echo "$time" | cut -d: -f1) * * $CRON_WEEKDAYS [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant --days '$RUN_DAYS'"
+  cron_line_boot="@reboot [ -S /var/run/docker.sock ] && docker info >/dev/null 2>&1 && [ -x '$SCRIPT_DIR/run-weekdays.sh' ] && '$SCRIPT_DIR/run-weekdays.sh' --$variant --days '$RUN_DAYS'"
   # Read current crontab
   local tmp
   tmp=$(mktemp)
@@ -178,7 +229,7 @@ install_cron_fallback() {
   grep -Fq "$cron_line_boot" "$tmp" || echo "$cron_line_boot" >>"$tmp"
   crontab "$tmp"
   rm -f "$tmp"
-  echo "[Install] cron entries added (@daily $time and @reboot)."
+  echo "[Install] cron entries added ($SCHEDULE_DAYS_LABEL $time and @reboot)."
   echo "           Note: cron does not re-run missed times; @reboot + stamp avoids duplicates."
 }
 
