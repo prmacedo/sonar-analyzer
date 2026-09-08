@@ -26,10 +26,16 @@ docker compose up -d
   - Linux/WSL: `bash ./run-multi.sh`
   - Windows: `run-multi.bat`
 
-4. Schedule weekday runs
+4. Schedule runs
 
-- Linux/WSL: `bash ./run-weekdays.sh --install --time HH:MM [--single|--multi]`
-- Windows: `schedule_weekdays.bat --time HH:MM [--multi|--single] [--force]` (uses Windows Task Scheduler)
+- Linux, specific days: `bash ./run-weekdays.sh --install --time 09:00 --days mon,wed,fri --multi`
+- Linux, every day: `bash ./run-weekdays.sh --install --time 09:00 --days all --multi`
+- macOS, specific days: `bash ./run-weekdays.sh --install --time 09:00 --days mon,wed,fri --multi`
+- macOS, every day: `bash ./run-weekdays.sh --install --time 09:00 --days all --multi`
+- Windows, specific days: `schedule_weekdays.bat --time 09:00 --days MON,WED,FRI --multi --force`
+- Windows, every day: `schedule_weekdays.bat --time 09:00 --days ALL --multi --force`
+- If `--days` is omitted, the default is Monday through Friday.
+- Use `--days all` or `--days ALL` to schedule every day.
 
 Notes
 
