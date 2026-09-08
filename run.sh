@@ -109,4 +109,4 @@ else
   exit 1
 fi
 
-python3 "$SCRIPT_DIR/sonar_analyze.py" --sonar-host "$SONAR_HOST" --sonar-token "$SONAR_TOKEN"
+python3 "$SCRIPT_DIR/sonar_analyze.py" --sonar-host "$SONAR_HOST"

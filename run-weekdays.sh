@@ -139,8 +139,9 @@ install_macos_launchd() {
     <key>Label</key><string>$label</string>
     <key>ProgramArguments</key>
     <array>
-      <string>$SCRIPT_DIR/run-weekdays.sh</string>
-      <string>--$variant</string>
+      <string>/usr/bin/osascript</string>
+      <string>-e</string>
+      <string>tell application "Terminal" to do script "/bin/bash '$SCRIPT_DIR/run-weekdays.sh' --$variant &gt;&gt; '$SCRIPT_DIR/sonar-weekdays.log' 2&gt;&gt; '$SCRIPT_DIR/sonar-weekdays.err'"</string>
     </array>
     <key>StartCalendarInterval</key>
     <array>
@@ -150,7 +151,7 @@ install_macos_launchd() {
       <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>4</integer></dict>
       <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$min</integer><key>Weekday</key><integer>5</integer></dict>
     </array>
-    <key>RunAtLoad</key><true/>
+    <key>RunAtLoad</key><false/>
     <key>StandardOutPath</key><string>$SCRIPT_DIR/sonar-weekdays.log</string>
     <key>StandardErrorPath</key><string>$SCRIPT_DIR/sonar-weekdays.err</string>
   </dict>
@@ -158,7 +159,7 @@ install_macos_launchd() {
 EOF
   launchctl unload "$plist" >/dev/null 2>&1 || true
   launchctl load "$plist"
-  echo "[Install] launchd job installed: $plist (Mon–Fri $time, RunAtLoad=true)"
+  echo "[Install] launchd job installed: $plist (Mon–Fri $time, RunAtLoad=false)"
 }
 
 install_cron_fallback() {
